@@ -24,6 +24,7 @@ install_requires = [
     'requests[security]',
     'configparser',
     'fido2',
+    'keyring'
 ]
 
 if system() == 'Windows':

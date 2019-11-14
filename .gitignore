@@ -96,6 +96,7 @@ ENV/
 # User-specific stuff:
 .idea
 *.iml
+.vscode
 
 ## File-based project format:
 *.iws

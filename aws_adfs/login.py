@@ -5,6 +5,7 @@ import botocore
 import botocore.exceptions
 import botocore.session
 import click
+import keyring
 from botocore import client
 from os import environ
 import sys
@@ -72,6 +73,12 @@ from . import role_chooser
     help='Read username, password from a local file (optional)',
 )
 @click.option(
+    '--use-keychain',
+    is_flag=True,
+    default=False,
+    help='Use OS keychain for storing and retrieving password (optional)',
+)
+@click.option(
     '--stdout',
     is_flag=True,
     help='Print aws_session_token in json on stdout.',
@@ -116,6 +123,7 @@ def login(
         env,
         stdin,
         authfile,
+        use_keychain,
         stdout,
         printenv,
         role_arn,
@@ -160,8 +168,15 @@ def login(
         if not config.adfs_user:
             config.adfs_user = click.prompt(text='Username', type=str, default=config.adfs_user)
 
+        if use_keychain:
+            config.adfs_user, password = _keyring_user_credentials(config.adfs_user)
+
         if not password:
             password = click.prompt('Password', type=str, hide_input=True)
+
+            if use_keychain:
+                keyring.set_password("aws-adfs", config.adfs_user, password)
+
 
         principal_roles, assertion, aws_session_duration = authenticator.authenticate(config, config.adfs_user, password)
 
@@ -277,6 +292,12 @@ def _emit_summary(config, session_duration):
             config.u2f_trigger_default,
         )
     )
+
+def _keyring_user_credentials(username):
+    if username:
+        password = keyring.get_password("aws-adfs", username)
+
+    return username, password
 
 
 def _file_user_credentials(profile, authfile):
