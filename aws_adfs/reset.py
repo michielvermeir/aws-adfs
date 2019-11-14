@@ -1,9 +1,11 @@
 import configparser
 
 import click
+import keyring
+import logging
 
 from os import environ
-from .prepare import create_adfs_default_config
+from .prepare import create_adfs_default_config, _load_adfs_config_from_stored_profile
 
 
 @click.command()
@@ -17,9 +19,22 @@ def reset(profile):
     removes stored profile
     """
     adfs_config = create_adfs_default_config('default')
+    _load_adfs_config_from_stored_profile(adfs_config, profile)
+
+    _clear_keychain(adfs_config)
     _clear_credentials(adfs_config, profile)
     click.echo('Profile: \'{}\' has been wiped out'.format(profile))
 
+def _clear_keychain(config):
+    """
+    Removes credentials from the keychain
+    """
+    try:
+        if config.adfs_user:
+            keyring.delete_password("aws-adfs", config.adfs_user)
+            logging.debug(f"Keychain password for {config.adfs_user} wiped")
+    except keyring.errors.PasswordDeleteError as delete_error:
+        pass
 
 def _clear_credentials(config, profile):
     def store_config(config_location, storer):

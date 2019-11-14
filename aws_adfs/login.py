@@ -6,6 +6,7 @@ import botocore.exceptions
 import botocore.session
 import click
 import keyring
+import logging
 from botocore import client
 from os import environ
 import sys
@@ -73,9 +74,9 @@ from . import role_chooser
     help='Read username, password from a local file (optional)',
 )
 @click.option(
-    '--use-keychain',
+    '--use-keychain/--no-use-keychain',
     is_flag=True,
-    default=False,
+    default=True,
     help='Use OS keychain for storing and retrieving password (optional)',
 )
 @click.option(
@@ -296,6 +297,9 @@ def _emit_summary(config, session_duration):
 def _keyring_user_credentials(username):
     if username:
         password = keyring.get_password("aws-adfs", username)
+
+    if password:
+        logging.debug(f"Retrieved password for {username} from the keychain")
 
     return username, password
 

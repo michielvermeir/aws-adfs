@@ -54,3 +54,5 @@ cli.add_command(list_profiles.list_profiles)
 cli.add_command(login.login)
 cli.add_command(reset.reset)
 
+if __name__ == "__main__":
+    cli()
