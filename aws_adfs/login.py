@@ -299,7 +299,7 @@ def _keyring_user_credentials(username):
         password = keyring.get_password("aws-adfs", username)
 
     if password:
-        logging.debug(f"Retrieved password for {username} from the keychain")
+        click.echo(f"Using password for user {username} from the keychain")
 
     return username, password
 

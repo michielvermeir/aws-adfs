@@ -14,18 +14,26 @@ from .prepare import create_adfs_default_config, _load_adfs_config_from_stored_p
     default=lambda: environ.get('AWS_DEFAULT_PROFILE', 'default'),
     help='AWS cli profile that will be removed'
 )
-def reset(profile):
+@click.option(
+    '--clear-keychain',
+    is_flag=True,
+    default=False,
+    help="Reset the stored keychain credentials associated with the ADFS user"
+)
+def reset(profile, clear_keychain):
     """
     removes stored profile
     """
     adfs_config = create_adfs_default_config('default')
     _load_adfs_config_from_stored_profile(adfs_config, profile)
 
-    _clear_keychain(adfs_config)
+    if clear_keychain:
+        _clear_keychain_credentials(adfs_config)
+
     _clear_credentials(adfs_config, profile)
     click.echo('Profile: \'{}\' has been wiped out'.format(profile))
 
-def _clear_keychain(config):
+def _clear_keychain_credentials(config):
     """
     Removes credentials from the keychain
     """
