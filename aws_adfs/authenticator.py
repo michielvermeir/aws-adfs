@@ -48,7 +48,7 @@ def authenticate(config, username=None, password=None, assertfile=None):
                 response.headers,
                 response.text
             ))
-            logging.error(u'Cannot extract saml assertion. Re-authentication needed?')
+            logging.debug(u'Cannot extract saml assertion. Re-authentication needed?')
         else:
             aggregated_principal_roles = _aggregate_roles_by_account_alias(session,
                                                                            config,

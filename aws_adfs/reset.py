@@ -22,14 +22,14 @@ from .prepare import create_adfs_default_config, _load_adfs_config_from_stored_p
 )
 def reset(profile, clear_keychain):
     """
-    removes stored profile
+    Removes stored profile and keychain password.
     """
     adfs_config = create_adfs_default_config('default')
     _load_adfs_config_from_stored_profile(adfs_config, profile)
 
     if clear_keychain:
         _clear_keychain_credentials(adfs_config)
-
+        
     _clear_credentials(adfs_config, profile)
     click.echo('Profile: \'{}\' has been wiped out'.format(profile))
 

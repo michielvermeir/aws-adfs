@@ -7,12 +7,14 @@ import botocore.session
 import click
 import keyring
 import logging
+from uuid import uuid4
 from botocore import client
 from os import environ
 import sys
 from . import authenticator
 from . import prepare
 from . import role_chooser
+from . import arn
 
 
 @click.command()
@@ -43,6 +45,18 @@ from . import role_chooser
     '--adfs-host',
     help='For the first time for a profile it has to be provided, next time for the same profile\n'
          'it will be loaded from the stored configuration',
+)
+@click.option(
+    "--adfs-user",
+    default=None,
+    required=False,
+    help=""
+)
+@click.option(
+    "--role-chaining-role-arn",
+    default=None,
+    required=False,
+    help="ARN for the role when used in role chaining mode"
 )
 @click.option(
     '--output-format',
@@ -118,6 +132,7 @@ def login(
         ssl_verification,
         adfs_ca_bundle,
         adfs_host,
+        adfs_user,
         output_format,
         provider_id,
         s3_signature_version,
@@ -125,6 +140,7 @@ def login(
         stdin,
         authfile,
         use_keychain,
+        role_chaining_role_arn,
         stdout,
         printenv,
         role_arn,
@@ -148,6 +164,7 @@ def login(
         session_duration,
         sspi,
         u2f_trigger_default,
+        role_chaining_role_arn,
     )
 
     _verification_checks(config)
@@ -167,7 +184,8 @@ def login(
             config.adfs_user, password = _file_user_credentials(config.profile, authfile)
 
         if not config.adfs_user:
-            config.adfs_user = click.prompt(text='Username', type=str, default=config.adfs_user)
+            config.adfs_user = adfs_user if adfs_user else click.prompt(
+                text='Username', type=str, default=config.adfs_user)
 
         if use_keychain:
             config.adfs_user, password = _keyring_user_credentials(config.adfs_user)
@@ -222,10 +240,23 @@ def login(
     )
 
     if stdout:
-        _emit_json(aws_session_token)
+        _store(config, aws_session_token)
+
+        if role_chaining_role_arn:
+            creds = aws_session_token['Credentials']
+            sts = boto3.client("sts",
+                               aws_access_key_id=creds['AccessKeyId'],
+                               aws_secret_access_key=creds['SecretAccessKey'],
+                               aws_session_token=creds['SessionToken'],
+                               )
+            chained_token = sts.assume_role(RoleArn=role_chaining_role_arn,
+                                            RoleSessionName=str(uuid4()))
+            _emit_json(chained_token)
+        else:
+            _emit_json(aws_session_token)
     elif printenv:
         _emit_summary(config, aws_session_duration)
-        _print_environment_variables(aws_session_token,config)
+        _print_environment_variables(aws_session_token, config)
     else:
         _store(config, aws_session_token)
         _emit_summary(config, aws_session_duration)
@@ -239,11 +270,32 @@ def _bind_aws_session_to_chosen_profile(config):
 
 
 def _emit_json(aws_session_token):
+    """
+    Output a format compatible with awscli credential_process for sourcing
+    credentials from an external process.
+
+    Warning:
+        Ensure that this method does not write secret information to StdErr 
+        because the AWS SDKs and CLI can capture and log such information, 
+        potentially exposing it to unauthorized users.
+    """
     click.echo(
-        u"""{{"AccessKeyId": "{}", "SecretAccessKey": "{}", "SessionToken": "{}"}}""".format(
-            aws_session_token['Credentials']['AccessKeyId'],
-            aws_session_token['Credentials']['SecretAccessKey'],
-            aws_session_token['Credentials']['SessionToken']
+        u"""{{"Version": {version}, "AccessKeyId": "{access_key}", "SecretAccessKey": "{secret_key}", "SessionToken": "{token}", "Expiration": "{exp}"}}""".format(
+            # The Version key must be set to 1. This value may be bumped over time as the payload structure evolves.
+            version=1,
+            access_key=aws_session_token['Credentials']['AccessKeyId'],
+            secret_key=aws_session_token['Credentials']['SecretAccessKey'],
+            token=aws_session_token['Credentials']['SessionToken'],
+            # The Expiration key is an ISO8601 formatted timestamp. If the
+            # Expiration key is not returned in stdout, the credentials are
+            # long term credentials that do not refresh. Otherwise the
+            # credentials are considered refreshable credentials and will be
+            # refreshed automatically.
+            #
+            # NOTE: Unlike with assume role credentials, the AWS CLI will
+            # NOT cache process credentials. If caching is needed, it must
+            # be implemented in the external process.
+            exp=aws_session_token['Credentials']['Expiration'].isoformat()
         )
     )
 
@@ -299,7 +351,7 @@ def _keyring_user_credentials(username):
         password = keyring.get_password("aws-adfs", username)
 
     if password:
-        click.echo(f"Using password for user {username} from the keychain")
+        logging.debug(f"Using password for user {username} from the keychain")
 
     return username, password
 

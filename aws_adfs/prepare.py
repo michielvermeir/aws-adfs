@@ -5,6 +5,8 @@ import botocore.session
 import botocore.exceptions
 from types import MethodType
 
+from . import arn
+
 
 def get_prepared_config(
         profile,
@@ -18,6 +20,7 @@ def get_prepared_config(
         session_duration,
         sspi,
         u2f_trigger_default,
+        role_chaining_role_arn
 ):
     """
     Prepares ADF configuration for login task.
@@ -64,6 +67,9 @@ def get_prepared_config(
     adfs_config.sspi = default_if_none(sspi, adfs_config.sspi)
     adfs_config.u2f_trigger_default = default_if_none(u2f_trigger_default, adfs_config.u2f_trigger_default)
 
+    if role_chaining_role_arn:
+        adfs_config.role_chaining_role_arn = role_chaining_role_arn
+
     return adfs_config
 
 
@@ -105,6 +111,8 @@ def create_adfs_default_config(profile):
     config.adfs_host = None
 
     config.adfs_user = None
+
+    config.role_chaining_role_arn = None
 
     # aws provider id. (Optional - 9/10 times it will always be urn:amazon:websevices)
     config.provider_id = 'urn:amazon:webservices'
