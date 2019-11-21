@@ -15,11 +15,11 @@ aws-adfs can be used as an external source for providing `awscli` with credentia
 In order to not have to prompt you for you password in this mode, the first authentication has to happen manually. The tool will prompt you for you AD user and password. It will securely store the AD password in the OS keychain for reuse later.
 
 ```bash
-$ aws-adfs login \                                                              
+$ aws-adfs login \
     --no-sspi \
     --use-keychain \
     --adfs-host=eadfs.agilent.com \
-    --role-arn=arn:aws:iam::057324062129:role/agilent-aws-dev-15-user \
+    --role-arn=arn:aws:iam::057324062129:role/agilent-aws-dev-15-developers \
     --profile=adfs
 
 Username: mvermeir@agilent.com 
@@ -30,7 +30,7 @@ Password: ********
             * AWS region                        : 'eu-central-1'
             * Output format                     : 'json'
             * SSL verification of ADFS Server   : 'ENABLED'
-            * Selected role_arn                 : 'arn:aws:iam::057324062129:role/agilent-aws-dev-15-user'
+            * Selected role_arn                 : 'arn:aws:iam::057324062129:role/agilent-aws-dev-15-developers'
             * ADFS Server                       : 'eadfs.agilent.com'
             * ADFS Session Duration in seconds  : '7200'
             * Provider ID                       : 'urn:amazon:webservices'
@@ -53,8 +53,8 @@ credential_process = aws-adfs login
   --use-keychain
   --adfs-user=<ad-username>@agilent.com 
   --adfs-host=eadfs.agilent.com
-  --role-arn=arn:aws:iam::057324062129:role/agilent-aws-dev-15-user
-  --role-chaining-role-arn=arn:aws:iam::775874812736:role/agilent-aws-dev-15-user
+  --role-arn=arn:aws:iam::057324062129:role/agilent-aws-dev-15-developers
+  --role-chaining-role-arn=arn:aws:iam::775874812736:role/agilent-aws-dev-15-developers
   --profile=adfs
   --stdout
 ```
