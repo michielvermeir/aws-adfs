@@ -21,27 +21,20 @@ The reason for this is that, assuming the final, desired role on the target AWS 
 </dl>
 
 
-## Example Configuration
+## Example config
 Suppose you are switching often between the following roles by passing through the IAM Account:
 
 | agilent-aws-iam-01                | 057324062129 |
-|-----------------------------------|---|
+|-----------------------------------|--------------|
 | agilent-aws-dev-15-developers     | 775874812736 |
 | agilent-aws-dev-15-devops         | 775874812736 |
 | agilent-aws-prd-15-devops         | 824799901001 |
 
 These two roles (developer and devops) span two different AWS accounts (dev-15 and prd-15). 
 
-### The credentials file
-The credentials file first needs to be bootstrapped for federated authentication using Active Directory by sourcing AWS credentials using the `aws-adfs` tool. There are a couple of things to note in order to understand what is going on, best explained by going over the individual items.
-
-Notice that there is a section in the credentials for each and every of the roles in table. The naming convention `adfs-$SHORT_ROLE_NAME` was picked for clarity and for adding predictability into the naming. Also notice that the initial Role ARN here corresponds to a role of the same name in the IAM Account. Additionally, the `AWS_PROFILE` is given the same exact same name as the section in the credentials file. And finally, notice that the param passed to `--use-keychain` is 
-
+The **credentials file** needs to be bootstrapped for federated authentication using Active Directory by using the `aws-adfs` tool as a credentials provider. Add a section for every role, you are never to use them directly.
 
 ```ini
-[default]
-region = eu-west-3
-
 [adfs-dev-15-developers]
 credential_process = aws-adfs login
 	--no-sspi
@@ -55,7 +48,7 @@ credential_process = aws-adfs login
 credential_process = aws-adfs login
 	--no-sspi
 	--adfs-host=eadfs.agilent.com
-	--role-arn=arn:aws:iam::057324062129:role/agilent-aws-dev-15-ops
+	--role-arn=arn:aws:iam::057324062129:role/agilent-aws-dev-15-devops
 	--use-keychain=mvermeir@agilent.com
 	--profile=adfs-dev-15-devops
 	--stdout
@@ -64,48 +57,58 @@ credential_process = aws-adfs login
 credential_process = aws-adfs login
 	--no-sspi
 	--adfs-host=eadfs.agilent.com
-	--role-arn=arn:aws:iam::057324062129:role/agilent-aws-prd-15-ops
+	--role-arn=arn:aws:iam::057324062129:role/agilent-aws-prd-15-devops
 	--use-keychain=mvermeir@agilent.com
 	--profile=adfs-prd-15-devops
 ```
-_Example `~/.aws/credentials` file for multi-role multi-account scenarios_
+_~/.aws/credentials_
 
+Then, as for the **config file**, first add a profile for every section in the credentials file. It needs to have the same name as the corresponding section in credentials and the name for the `--profile` argument as defined in the credentials file. These profiles are for storing additional metadata and will also serve as the source profiles when assuming roles:
 
-### The config file
 ```ini
-[profile developer@dev-15]
-source_profile = adfs-dev-15-developers
-region = eu-west-3
-role_arn = arn:aws:iam::775874812736:role/agilent-aws-dev-15-developers
-
-[profile admin@dev-15]
-source_profile = adfs-dev-15-user
-region = eu-west-3
-role_arn = arn:aws:iam::775874812736:role/agilent-aws-dev-15-user
-
-[profile admin@tst-15]
-source_profile = adfs-tst-15-user
-region = eu-west-3
-role_arn = arn:aws:iam::790662393407:role/agilent-aws-tst-15-user
-
-[profile admin@prd-15]
-source_profile = adfs-prd-15-user
-region = eu-west-3
-role_arn = arn:aws:iam::824799901001:role/agilent-aws-prd-15-user
-
 [profile adfs-dev-15-developers]
 region = eu-west-3
 output = json
 
-[profile adfs-dev-15-user]
+[profile adfs-dev-15-devops]
 region = eu-west-3
 output = json
 
-[profile adfs-tst-15-user]
-region = eu-west-3
-output = json
-
-[profile adfs-prd-15-user]
+[profile adfs-prd-15-devops]
 region = eu-west-3
 output = json
 ```
+_~/.aws/config_
+
+Next, add a profile for every role in the target account using the `role_arn` and ensure that the `source_profile` is set to the corresponding adfs profile. This is important, as it allows you to assume the final, desired role on the target account, by using a different profile and sourcing your credentials using the `aws-adfs` tool.
+
+```ini
+[profile developer@dev]
+source_profile = adfs-dev-15-developers
+region = eu-west-3
+role_arn = arn:aws:iam::775874812736:role/agilent-aws-dev-15-developers
+
+[profile devops@dev]
+source_profile = adfs-dev-15-devops
+region = eu-west-3
+role_arn = arn:aws:iam::775874812736:role/agilent-aws-dev-15-devops
+
+[profile devops@prd]
+source_profile = adfs-prd-15-devops
+region = eu-west-3
+role_arn = arn:aws:iam::824799901001:role/agilent-aws-prd-15-user
+```
+_~/.aws/config_
+
+Using this approach, it becomes trivial to switch between roles using by setting the `AWS_PROFILE` environment variable or by passing the `--profile` param to the AWS CLI: `AWS_PROFILE=developer@dev aws sts get-caller-identity` or `aws --profile=devops@dev sts get-caller-identity`.
+
+Now, if you use one of these profiles more than the other, it is also trivial to add a default profile that will be used if no other profile is selected:
+
+```ini
+[default]
+source_profile = adfs-dev-15-devops
+region = eu-west-3
+role_arn = arn:aws:iam::775874812736:role/agilent-aws-dev-15-devops
+```
+_~/.aws/config_
+
