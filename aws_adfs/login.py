@@ -1,5 +1,6 @@
 import configparser
 
+import re
 import boto3
 import botocore
 import botocore.exceptions
@@ -7,6 +8,7 @@ import botocore.session
 import click
 import keyring
 import logging
+import subprocess
 from uuid import uuid4
 from botocore import client
 from os import environ
@@ -15,6 +17,27 @@ from . import authenticator
 from . import prepare
 from . import role_chooser
 from . import arn
+
+
+def prompt_password_using_osascript(ad_user):
+    response = subprocess.check_output([
+        'osascript', 
+        '-e', 
+        f"""
+        Tell application "System Events" to display dialog "Enter the AD password for {ad_user}" with hidden answer default answer ""
+        """]
+    )
+
+    matches = re.search(
+        r"button returned:(?P<button>.*), text returned:(?P<password>.*)", response.decode("ascii")
+    )
+
+    return (
+        matches.group("password") 
+        if matches and matches.group("button") == "OK" 
+        else None
+    )
+
 
 
 @click.command()
@@ -125,6 +148,11 @@ from . import arn
     default=None,
     help='Whether or not to also trigger the default authentication method when U2F is available (only works with Duo for now).',
 )
+@click.option(
+    '--prompt',
+    default=None,
+    help="Use an out-of-band prompt like osascript to prompt for the password"
+)
 def login(
         profile,
         region,
@@ -147,6 +175,7 @@ def login(
         assertfile,
         sspi,
         u2f_trigger_default,
+        prompt
 ):
     """
     Authenticates an user with active directory credentials
@@ -190,7 +219,14 @@ def login(
             config.adfs_user, password = _keyring_user_credentials(use_keychain)
 
         if not password:
-            password = click.prompt('Password', type=str, hide_input=True)
+            if prompt == "osascript":
+                # An "out-of-band" password prompt in order not to interrupt
+                # the flow of `credential_process` to source the password
+                password = prompt_password_using_osascript(config.adfs_user)
+            elif prompt == "click":
+                password = click.prompt('Password', type=str, hide_input=True) 
+            else:
+                password = click.prompt('Password', type=str, hide_input=True) 
 
             if use_keychain:
                 keyring.set_password("aws-adfs", config.adfs_user, password)
