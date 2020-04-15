@@ -1,67 +1,68 @@
 `aws-adfs` is a command line tool that can be use Active Directory authentication in order to redeem and redeem temporary security credentials for usage with AWS.
 
 ## Installation
+
 The tool can be installed globally or within a Python 3 virtualenv.
 
 `pip3 install -e git+ssh://git@github.com/Multiplicom/aws-adfs.git#egg=aws-adfs awscli`
 
-or 
+or
 
 `python3 -m venv ~/.virtualenvs/aws && workon aws && pip install -e git+ssh://git@github.com/Multiplicom/aws-adfs.git#egg=aws-adfs awscli`
 
-aws-adfs can be used as an external source for providing `awscli` with credentials. This will instruct `aws-adfs` to regularly redeem temporary security credentials in the background when using `awscli`. 
-
-## First-Time Authentication
-In order to not have to prompt you for you password in this mode, the first authentication has to happen manually. The tool will prompt you for you AD user and password. It will securely store the AD password in the OS keychain for reuse later.
-
-```bash
-$ aws-adfs login \
-    --no-sspi \
-    --use-keychain \
-    --adfs-host=eadfs.agilent.com \
-    --role-arn=arn:aws:iam::057324062129:role/agilent-aws-dev-15-developers \
-    --profile=adfs
-
-Username: mvermeir@agilent.com 
-Password: ********
-
-        Prepared ADFS configuration as follows:
-            * AWS CLI profile                   : 'adfs'
-            * AWS region                        : 'eu-central-1'
-            * Output format                     : 'json'
-            * SSL verification of ADFS Server   : 'ENABLED'
-            * Selected role_arn                 : 'arn:aws:iam::057324062129:role/agilent-aws-dev-15-developers'
-            * ADFS Server                       : 'eadfs.agilent.com'
-            * ADFS Session Duration in seconds  : '7200'
-            * Provider ID                       : 'urn:amazon:webservices'
-            * S3 Signature Version              : 'None'
-            * STS Session Duration in seconds   : '3600'
-            * SSPI:                             : 'False'
-            * U2F and default method            : 'Tru
-```
-_Example command for first time authentication._
-
+aws-adfs can be used as an external source for providing `awscli` with credentials. This will instruct `aws-adfs` to regularly redeem temporary security credentials in the background when using `awscli`.
 
 ## Usage as a Credential Provider
-If you don't already have one, create a `.aws` folder in your home directory and initialize a config file.
+
+If you don't already have one, create a `.aws` folder in your home directory and initialize two files, a credentials file and a configuration file with the following contents:
 
 ```ini
-[default]
-default_region = "eu-west-3" # Paris
+[adfs-dev-15-developers]
 credential_process = aws-adfs login
-  --no-sspi
-  --use-keychain
-  --adfs-user=<ad-username>@agilent.com 
-  --adfs-host=eadfs.agilent.com
-  --role-arn=arn:aws:iam::057324062129:role/agilent-aws-dev-15-developers
-  --role-chaining-role-arn=arn:aws:iam::775874812736:role/agilent-aws-dev-15-developers
-  --profile=adfs
-  --stdout
+	--no-sspi
+	--adfs-host=eadfs.agilent.com
+  # Important: The line below needs to be changed to your personal
+  # AD Username. The format is username@agilent.com or AGILENT\username
+  # and is not to be mistaken for an e-mail address.
+	--use-keychain=mvermeir@agilent.com
+	--prompt=osascript
+	--role-arn=arn:aws:iam::057324062129:role/agilent-aws-dev-15-developers
+	--profile=adfs-dev-15-developers
+	--stdout
 ```
 
-_Example ~/.aws/config file with aws-adfs as an external credentials provider_
+_Example ~/.aws/credentials file with aws-adfs as an external credentials provider_
 
-Now try it out by using the `awscli`.
+Next, initialize the `config` file with the following values:
+```ini
+[default]
+source_profile = adfs-dev-15-developers
+region = eu-west-3
+role_arn = arn:aws:iam::775874812736:role/agilent-aws-dev-15-developers
+
+[profile adfs-dev-15-developers]
+region = eu-west-3
+output = json
+```
+
+_Example ~/.aws/config with the default profile assuming a different role based on another profile_
+
+Now try it out by running `aws sts get-caller-identity`. If this is your first time, running this command, you
+will be prompted several times:
+
+First you need to approve the `aws-adfs` tool to access the macOS keychain. The keychain is the place where the tool
+securely stores your AD password, so it can't be inadvertently shared with another party that gains access to your 
+computer.
+
+Enter the password to unlock your macOS keychain, which is usually your AD passsword, an click _Always allow_.
+
+Next, you will see a prompt for your terminal to access the system events. Clicking _Allow_, allows
+the `aws-adfs` tool to prompt you for your AD password if it didn't find it in the keychain without 
+interrupting the process sourcing the credentials.
+
+Lastly, you will see the password prompt if this is your first time using the tool. Now you can use the aws CLI tool
+without being prompted for your AD password. 
+
 ```
 $ aws s3 ls
 2018-04-26 10:37:31 agilent-aws-dev-15
@@ -81,3 +82,20 @@ $ aws s3 ls
 2018-11-06 09:02:27 mr17-011-dev-15
 2018-12-18 16:05:24 mr19-internal-dev-15
 ```
+
+### Updating your AD password
+If your AD password expired or you recently changed your password, you might see the following error:
+
+> Error when retrieving credentials from custom-process: This account does not have access to any roles
+
+In that case, what you need to do is open the macOS keychain, look for the entry called **aws-adfs** and delete it. Run the aws command again to be prompted for your updated AD password.
+
+
+## Troubleshooting
+
+If you get the following error message:
+> Error when retrieving credentials from custom-process: This account does not have access to any roles
+
+There are two possible causes and solution:
+1. Either your AD password is wrong or might have changed. See the section on _Updating your AD password_ on how you can reset it.
+2. You are not connected to the Agilent network. Either make sure you are on the spark network or connect with the VPN.
