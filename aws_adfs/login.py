@@ -88,9 +88,8 @@ from . import arn
     help='Read username, password from a local file (optional)',
 )
 @click.option(
-    '--use-keychain/--no-use-keychain',
-    is_flag=True,
-    default=True,
+    '--use-keychain',
+    default=None,
     help='Use OS keychain for storing and retrieving password (optional)',
 )
 @click.option(
@@ -183,12 +182,12 @@ def login(
         elif authfile:
             config.adfs_user, password = _file_user_credentials(config.profile, authfile)
 
-        if not config.adfs_user:
+        if not config.adfs_user and use_keychain is None:
             config.adfs_user = adfs_user if adfs_user else click.prompt(
                 text='Username', type=str, default=config.adfs_user)
 
         if use_keychain:
-            config.adfs_user, password = _keyring_user_credentials(config.adfs_user)
+            config.adfs_user, password = _keyring_user_credentials(use_keychain)
 
         if not password:
             password = click.prompt('Password', type=str, hide_input=True)
